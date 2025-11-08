@@ -8,42 +8,47 @@ import {
   IconButton,
   Portal,
   SegmentedButtons,
+  Snackbar,
   Text
 } from "react-native-paper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "@/services/api";
 
 type User = {
   userId: number;
   name: string;
+  email: string;
+  isTeacher: boolean;
 };
 
 export default function ManageUsers() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
 
-  const [dialogState, setDialogState] = React.useState(false);
-
-  const showDialog = () => setDialogState(true);
-  const hideDialog = () => setDialogState(false);
-
-  const teachers = [
-    { userId: 1, name: "Prof. Pedro" },
-    { userId: 2, name: "Prof. Israel" },
-    { userId: 3, name: "Prof. Gabriel" },
-    { userId: 4, name: "Prof. Matheus" }
-  ];
-  const students = [
-    { userId: 1, name: "Aluno Pedro" },
-    { userId: 2, name: "Aluno Israel" },
-    { userId: 3, name: "Aluno Pedro" },
-    { userId: 4, name: "Aluno Israel" }
-  ];
-
   const [segment, setSegment] = React.useState("teacher");
-  const [users, setUsers] = React.useState<User[]>(teachers);
-
+  const [users, setUsers] = React.useState<User[]>([]);
   const [page, setPage] = React.useState<number>(0);
   const [numberOfItemsPerPageList] = React.useState([2, 3, 4]);
   const [itemsPerPage, onItemsPerPageChange] = React.useState(numberOfItemsPerPageList[0]);
+  const [dialogState, setDialogState] = React.useState(false);
+  const [selectedUser, setSelectedUser] = React.useState<User | null>(null);
+
+  const [snackbarVisible, setSnackbarVisible] = React.useState(false);
+  const [snackbarMessage, setSnackbarMessage] = React.useState("");
+
+  const showSnackbar = (msg: string) => {
+    setSnackbarMessage(msg);
+    setSnackbarVisible(true);
+  };
+
+  const hideSnackbar = () => setSnackbarVisible(false);
+
+  const showDialog = (user: User) => {
+    setSelectedUser(user);
+    setDialogState(true);
+  };
+
+  const hideDialog = () => setDialogState(false);
 
   const from = page * itemsPerPage;
   const to = Math.min((page + 1) * itemsPerPage, users.length);
@@ -52,13 +57,53 @@ export default function ManageUsers() {
     setPage(0);
   }, [itemsPerPage]);
 
+  // --- Buscar usuários (somente professores autenticados) ---
   React.useEffect(() => {
-    if (segment === "teacher") {
-      setUsers(teachers);
-    } else {
-      setUsers(students);
-    }
+    const fetchUsers = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!token) {
+          router.replace("/login");
+          return;
+        }
+
+        const response = await api.get(`/users?isTeacher=${segment === "teacher"}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setUsers(response.data);
+      } catch (err: any) {
+        console.error("Erro ao buscar usuários:", err.message);
+        showSnackbar("Erro ao buscar usuários.");
+      }
+    };
+
+    fetchUsers();
   }, [segment]);
+
+  // --- Excluir usuário ---
+  const handleDelete = async () => {
+    if (!selectedUser) return;
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await api.delete(`/users/${selectedUser.userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.status === 200) {
+        setUsers(users.filter((u) => u.userId !== selectedUser.userId));
+        showSnackbar("Usuário excluído com sucesso.");
+      } else {
+        showSnackbar("Erro ao excluir usuário.");
+      }
+    } catch (err) {
+      console.error(err);
+      showSnackbar("Erro de conexão.");
+    } finally {
+      hideDialog();
+    }
+  };
 
   return (
     <ScrollView
@@ -70,17 +115,13 @@ export default function ManageUsers() {
       <View
         style={[
           styles.container,
-          {
-            padding: width < 400 ? 10 : 20,
-            borderRadius: width < 400 ? 8 : 12
-          }
+          { padding: width < 400 ? 10 : 20, borderRadius: width < 400 ? 8 : 12 }
         ]}
       >
         <Text variant="titleLarge" style={styles.title}>
           Gerenciar Usuários
         </Text>
 
-        {/* Botões de seleção */}
         <SegmentedButtons
           value={segment}
           onValueChange={setSegment}
@@ -91,7 +132,6 @@ export default function ManageUsers() {
           style={styles.segmentedButtons}
         />
 
-        {/* Botão de adicionar */}
         <Button
           mode="contained"
           buttonColor="green"
@@ -101,7 +141,6 @@ export default function ManageUsers() {
           Adicionar usuário
         </Button>
 
-        {/* Tabela de usuários */}
         <View style={[styles.tableContainer, { width: width < 400 ? "100%" : "90%" }]}>
           <DataTable>
             <DataTable.Header>
@@ -116,8 +155,12 @@ export default function ManageUsers() {
                 <DataTable.Cell>{user.name}</DataTable.Cell>
                 <DataTable.Cell>
                   <View style={styles.iconRow}>
-                    <IconButton icon="pencil" size={20} onPress={() => router.push("/editUser")} />
-                    <IconButton icon="delete" size={20} onPress={showDialog} />
+                    <IconButton
+                      icon="pencil"
+                      size={20}
+                      onPress={() => router.push(`/editUser?id=${user.userId}`)}
+                    />
+                    <IconButton icon="delete" size={20} onPress={() => showDialog(user)} />
                   </View>
                 </DataTable.Cell>
               </DataTable.Row>
@@ -135,6 +178,7 @@ export default function ManageUsers() {
               selectPageDropdownLabel={"Linhas por página"}
             />
           </DataTable>
+
           <Portal>
             <Dialog visible={dialogState} onDismiss={hideDialog}>
               <Dialog.Title>Aviso</Dialog.Title>
@@ -145,10 +189,14 @@ export default function ManageUsers() {
               </Dialog.Content>
               <Dialog.Actions>
                 <Button onPress={hideDialog}>Cancelar</Button>
-                <Button onPress={hideDialog}>Excluir</Button>
+                <Button onPress={handleDelete}>Excluir</Button>
               </Dialog.Actions>
             </Dialog>
           </Portal>
+
+          <Snackbar visible={snackbarVisible} onDismiss={hideSnackbar} duration={3000}>
+            {snackbarMessage}
+          </Snackbar>
         </View>
       </View>
     </ScrollView>

@@ -1,8 +1,11 @@
+import React, { useEffect, useState } from "react";
+import { View, ActivityIndicator } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter, usePathname, Stack } from "expo-router";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import { MD3LightTheme, Provider as PaperProvider } from "react-native-paper";
+import { StatusBar } from "expo-status-bar";
 
 export const unstable_settings = {
   anchor: "(tabs)"
@@ -10,6 +13,9 @@ export const unstable_settings = {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const neutralTheme = {
     ...MD3LightTheme,
@@ -22,6 +28,49 @@ export default function RootLayout() {
       onSurface: "#000"
     }
   };
+
+  useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const user = await AsyncStorage.getItem("user");
+
+        const isAuthenticated = token && user;
+        const isPublicRoute = ["/login"].includes(pathname);
+
+        if (!isAuthenticated && !isPublicRoute) {
+          router.replace("/login");
+          return;
+        }
+
+        if (isAuthenticated && isPublicRoute) {
+          router.replace("/");
+          return;
+        }
+      } catch (error) {
+        console.error("Erro ao verificar autenticação:", error);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    verifyAuth();
+  }, [pathname]);
+
+  if (checkingAuth) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#a8cafe"
+        }}
+      >
+        <ActivityIndicator size="large" color="#5c8df6" />
+      </View>
+    );
+  }
 
   return (
     <PaperProvider theme={neutralTheme}>

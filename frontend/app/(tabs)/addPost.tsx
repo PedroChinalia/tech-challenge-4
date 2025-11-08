@@ -1,13 +1,73 @@
 import { ThemedView } from "@/components/themed-view";
 import * as React from "react";
 import { Dimensions, ScrollView, StyleSheet, View } from "react-native";
-import { Button, Text, TextInput } from "react-native-paper";
+import { Button, Text, TextInput, Snackbar } from "react-native-paper";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter, useFocusEffect } from "expo-router";
+import api from "@/services/api";
 
 const { width, height } = Dimensions.get("window");
 
 export default function AddPost() {
+  const router = useRouter();
+
   const [title, setTitle] = React.useState("");
   const [content, setContent] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [snackbarVisible, setSnackbarVisible] = React.useState(false);
+  const [snackbarMessage, setSnackbarMessage] = React.useState("");
+  const [snackbarColor, setSnackbarColor] = React.useState<string>("green");
+
+  const showSnackbar = (msg: string, color = "green") => {
+    setSnackbarMessage(msg);
+    setSnackbarColor(color);
+    setSnackbarVisible(true);
+  };
+
+  const handleSavePost = async () => {
+    if (!title || !content) {
+      showSnackbar("Preencha título e conteúdo antes de salvar.", "red");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        showSnackbar("Você precisa estar autenticado.", "red");
+        return;
+      }
+
+      await api.post(
+        "/posts",
+        { title, content },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      showSnackbar("Postagem criada com sucesso!");
+
+      setTimeout(() => {
+        router.replace("/");
+      }, 1000);
+    } catch (error: any) {
+      console.error("Erro ao criar postagem:", error);
+      if (error.response?.status === 403) {
+        showSnackbar("Apenas professores podem criar postagens.", "red");
+      } else {
+        showSnackbar("Erro ao salvar postagem. Tente novamente.", "red");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      setTitle("");
+      setContent("");
+    }, [])
+  );
 
   return (
     <ThemedView style={styles.container}>
@@ -39,13 +99,24 @@ export default function AddPost() {
           <Button
             mode="contained"
             buttonColor="green"
-            onPress={() => console.log("Post salvo!")}
+            onPress={handleSavePost}
+            loading={loading}
+            disabled={loading}
             style={styles.button}
             contentStyle={{ paddingVertical: height * 0.015 }}
           >
             Salvar
           </Button>
         </View>
+
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={3000}
+          style={{ backgroundColor: snackbarColor }}
+        >
+          {snackbarMessage}
+        </Snackbar>
       </ScrollView>
     </ThemedView>
   );

@@ -9,7 +9,7 @@ import {
   StyleSheet,
   View
 } from "react-native";
-import { Button, Switch, Text, TextInput } from "react-native-paper";
+import { Button, Switch, Text, TextInput, Snackbar } from "react-native-paper";
 
 const { width, height } = Dimensions.get("window");
 
@@ -19,9 +19,61 @@ export default function Register() {
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-
   const [isTeacher, setIsTeacher] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+
+  const [snackbarVisible, setSnackbarVisible] = React.useState(false);
+  const [snackbarMessage, setSnackbarMessage] = React.useState("");
+  const [snackbarColor, setSnackbarColor] = React.useState("#e53935");
+
   const onToggleSwitch = () => setIsTeacher(!isTeacher);
+
+  const handleRegister = async () => {
+    if (!name || !email || !password) {
+      setSnackbarMessage("Preencha todos os campos obrigatórios!");
+      setSnackbarColor("#e53935");
+      setSnackbarVisible(true);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch("http://localhost:4000/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          isTeacher
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setSnackbarMessage(data.error || "Erro ao cadastrar usuário");
+        setSnackbarColor("#e53935");
+        setSnackbarVisible(true);
+        return;
+      }
+
+      // sucesso
+      setSnackbarMessage("Usuário cadastrado com sucesso!");
+      setSnackbarColor("#43a047");
+      setSnackbarVisible(true);
+
+      // Redirecionar após pequeno delay
+      setTimeout(() => router.push("/login"), 1500);
+    } catch (error) {
+      console.error(error);
+      setSnackbarMessage("Erro de conexão com o servidor");
+      setSnackbarColor("#e53935");
+      setSnackbarVisible(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <ThemedView style={styles.safeArea}>
@@ -77,14 +129,16 @@ export default function Register() {
                 textColor="black"
                 onPress={() => router.push("/login")}
                 style={styles.button}
+                disabled={loading}
               >
                 Voltar
               </Button>
               <Button
                 mode="contained"
                 buttonColor="green"
-                onPress={() => console.log("Entrar")}
+                onPress={handleRegister}
                 style={styles.button}
+                loading={loading}
               >
                 Cadastrar
               </Button>
@@ -92,6 +146,15 @@ export default function Register() {
           </ThemedView>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={3000}
+        style={[styles.snackbar, { backgroundColor: snackbarColor }]}
+      >
+        <Text style={styles.snackbarText}>{snackbarMessage}</Text>
+      </Snackbar>
     </ThemedView>
   );
 }
@@ -140,5 +203,15 @@ const styles = StyleSheet.create({
   },
   switch: {
     marginLeft: 8
+  },
+  snackbar: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8
+  },
+  snackbarText: {
+    textAlign: "center",
+    color: "#fff",
+    fontWeight: "500"
   }
 });

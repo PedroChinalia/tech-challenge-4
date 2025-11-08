@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import * as React from "react";
 import { Dimensions, StyleSheet, View } from "react-native";
 import { Button, Dialog, IconButton, Portal, Text } from "react-native-paper";
@@ -11,15 +10,22 @@ export type PostProps = {
   author: string;
   content: string;
   creationDate: Date;
+  isTeacher?: boolean;
+  onView?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 };
 
 export default function Post(props: PostProps) {
-  const router = useRouter();
-
   const [dialogState, setDialogState] = React.useState(false);
 
   const showDialog = () => setDialogState(true);
   const hideDialog = () => setDialogState(false);
+
+  const confirmDelete = () => {
+    hideDialog();
+    props.onDelete?.();
+  };
 
   return (
     <View style={styles.container}>
@@ -36,19 +42,24 @@ export default function Post(props: PostProps) {
         {props.content}
       </Text>
 
-      {/* Rodapé (data + ícones lado a lado) */}
+      {/* Rodapé */}
       <View style={styles.footerRow}>
         <Text variant="labelSmall" style={styles.date}>
-          {props.creationDate.toDateString()}
+          {new Date(props.creationDate).toDateString()}
         </Text>
 
         <View style={styles.iconRow}>
-          <IconButton icon="eye" size={20} onPress={() => router.push("/seePost")} />
-          <IconButton icon="pencil" size={20} onPress={() => router.push("/editPost")} />
-          <IconButton icon="delete" size={20} onPress={showDialog} />
+          <IconButton icon="eye" size={20} onPress={props.onView} />
+          {props.isTeacher && (
+            <>
+              <IconButton icon="pencil" size={20} onPress={props.onEdit} />
+              <IconButton icon="delete" size={20} onPress={showDialog} />
+            </>
+          )}
         </View>
       </View>
 
+      {/* Diálogo de confirmação */}
       <Portal>
         <Dialog visible={dialogState} onDismiss={hideDialog}>
           <Dialog.Title>Aviso</Dialog.Title>
@@ -59,7 +70,7 @@ export default function Post(props: PostProps) {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={hideDialog}>Cancelar</Button>
-            <Button onPress={hideDialog}>Excluir</Button>
+            <Button onPress={confirmDelete}>Excluir</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
