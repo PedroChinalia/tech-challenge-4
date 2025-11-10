@@ -37,13 +37,14 @@ export default function RootLayout() {
 
         const isAuthenticated = token && user;
         const isPublicRoute = ["/login"].includes(pathname);
+        const isSpecialRoute = ["/register"].includes(pathname);
 
-        if (!isAuthenticated && !isPublicRoute) {
+        if (!isAuthenticated && !isPublicRoute && !isSpecialRoute) {
           router.replace("/login");
           return;
         }
 
-        if (isAuthenticated && isPublicRoute) {
+        if (isAuthenticated && isPublicRoute && !isSpecialRoute) {
           router.replace("/");
           return;
         }
